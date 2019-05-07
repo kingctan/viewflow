@@ -1,7 +1,10 @@
+from __future__ import unicode_literals
+
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponseRedirect
 from django.views import generic
 from django.utils.decorators import method_decorator
+from django.utils.translation import ugettext_lazy as _
 
 from ...decorators import flow_start_view
 from .mixins import MessageUserMixin
@@ -55,12 +58,12 @@ class BaseStartFlowMixin(object):
 
 
 class StartFlowMixin(MessageUserMixin, BaseStartFlowMixin):
-    """Mixin for flow views co,pletes activation on a form submit."""
+    """Mixin for flow views completes activation on a form submit."""
 
     def activation_done(self, *args, **kwargs):
         """Finish task activation."""
         self.activation.done()
-        self.success('Process {process} has been started.')
+        self.success(_('Process {process} has been started.'))
 
     def form_valid(self, *args, **kwargs):
         """If the form is valid, save the associated model and finish the task."""
@@ -69,9 +72,7 @@ class StartFlowMixin(MessageUserMixin, BaseStartFlowMixin):
         return HttpResponseRedirect(self.get_success_url())
 
 
-class CreateProcessView(StartFlowMixin, generic.UpdateView):
-    """Generic view to create a process."""
-
+class CreateProcessView(StartFlowMixin, generic.UpdateView): # noqa D101
     def __init__(self, *args, **kwargs):  # noqa D102
         super(CreateProcessView, self).__init__(*args, **kwargs)
         if self.form_class is None and self.fields is None:

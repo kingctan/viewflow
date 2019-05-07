@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 import inspect
 
 
@@ -16,7 +18,7 @@ class Transition(object):
         self.conditions = conditions if conditions else []
 
     def conditions_met(self, instance):
-        """Check that all assotioated conditions is True."""
+        """Check that all associated conditions is True."""
         return all(map(lambda condition: condition(instance), self.conditions))
 
 
@@ -75,7 +77,7 @@ class TransitionDescriptor(object):
         return self.transitions
 
     def get_transition(self, source_state, instance=None):
-        """Get a transtion of a source_state.
+        """Get a transition of a source_state.
 
         Returns None if there is no outgoing transitions.
         """
@@ -119,7 +121,7 @@ class TransitionDescriptor(object):
 
 
 class SuperTransitionDescriptor(TransitionDescriptor):
-    """Descriptor that performs the transition descrived in the base class."""
+    """Descriptor that performs the transition described in the base class."""
 
     def get_descriptor(self, instance):
         """Lookup for the transition descriptor in the base classes."""
@@ -249,7 +251,7 @@ class State(object):
             return func
         return _wrapper
 
-    def get_available_transtions(self, instance):
+    def get_available_transitions(self, instance):
         """List of transitions available from the current state."""
         transitions_cache = instance.__class__.__dict__.get('_transitions{}'.format(self.propname), None)
         if transitions_cache is None:

@@ -1,23 +1,28 @@
+from __future__ import unicode_literals
+
 from django.conf import settings
 from django.db import models
 from django.template import Template, Context
+from django.utils.translation import ugettext_lazy as _
+from django.utils.encoding import python_2_unicode_compatible, force_text
 
-from .activation import STATUS
+from .activation import STATUS, STATUS_CHOICES
 from .exceptions import FlowRuntimeError
 from .fields import FlowReferenceField, TaskReferenceField, TokenField
-from .managers import ProcessManager, TaskManager, coerce_to_related_instance
+from .managers import ProcessQuerySet, TaskQuerySet, coerce_to_related_instance
 
 
+@python_2_unicode_compatible
 class AbstractProcess(models.Model):
     """Base class for Process data object."""
 
-    flow_class = FlowReferenceField()
-    status = models.CharField(max_length=50, default=STATUS.NEW)
+    flow_class = FlowReferenceField(_('Flow'))
+    status = models.CharField(_('Status'), max_length=50, default=STATUS.NEW)
 
-    created = models.DateTimeField(auto_now_add=True)
-    finished = models.DateTimeField(blank=True, null=True)
+    created = models.DateTimeField(_('Created'), auto_now_add=True)
+    finished = models.DateTimeField(_('Finished'), blank=True, null=True)
 
-    objects = ProcessManager()
+    objects = ProcessQuerySet.as_manager()
 
     @property
     def created_by(self):
@@ -45,7 +50,7 @@ class AbstractProcess(models.Model):
         """Quick textual process state representation for end user."""
         if self.flow_class and self.flow_class.process_class == type(self):
             return Template(
-                self.flow_class.summary_template
+                force_text(self.flow_class.summary_template)
             ).render(
                 Context({'process': self, 'flow_class': self.flow_class})
             )
@@ -57,43 +62,35 @@ class AbstractProcess(models.Model):
             return '{} #{}'.format(self.flow_class.process_title, self.pk)
         return "<Process {}> - {}".format(self.pk, self.status)
 
-    def refresh_from_db(self, using=None, fields=None, **kwargs):
-        """Backport for django 1.6."""
-        if hasattr(models.Model, 'refresh_from_db'):
-            super(AbstractProcess, self).refresh_from_db(using=using, fields=fields, **kwargs)
-        else:
-            """
-            django 1.6, only basic fallback
-            """
-            db_instance = self.__class__._default_manager.filter(pk=self.pk).get()
-            for field in self._meta.concrete_fields:
-                setattr(self, field.attname, getattr(db_instance, field.attname))
-
     class Meta:  # noqa D101
         abstract = True
 
 
+@python_2_unicode_compatible
 class AbstractTask(models.Model):
     """
     Base class for Task state objects.
 
     In addition, you have to define at least process foreign key field::
 
-        process = models.ForeignKey(Process)
+        process = models.ForeignKey(Process, on_delete=models.CASCADE)
 
     """
 
-    flow_task = TaskReferenceField()
-    flow_task_type = models.CharField(max_length=50)
-    status = models.CharField(max_length=50, default=STATUS.NEW, db_index=True)
+    flow_task = TaskReferenceField(_('Task'))
+    flow_task_type = models.CharField(_('Type'), max_length=50)
+    status = models.CharField(_('Status'), max_length=50, default=STATUS.NEW, db_index=True)
 
-    created = models.DateTimeField(auto_now_add=True)
-    started = models.DateTimeField(blank=True, null=True)
-    finished = models.DateTimeField(blank=True, null=True)
-    previous = models.ManyToManyField('self', symmetrical=False, related_name='leading')
-    token = TokenField(default='start')
+    created = models.DateTimeField(_('Created'), auto_now_add=True)
+    started = models.DateTimeField(_('Started'), blank=True, null=True)
+    finished = models.DateTimeField(_('Finished'), blank=True, null=True)
+    previous = models.ManyToManyField('self', symmetrical=False, related_name='leading', verbose_name=_('Previous'))
+    token = TokenField(_('Token'), default='start')
 
-    objects = TaskManager()
+    objects = TaskQuerySet.as_manager()
+
+    def get_status_display(self):
+        return dict(STATUS_CHOICES).get(self.status, self.status)
 
     @property
     def flow_process(self):
@@ -106,14 +103,18 @@ class AbstractTask(models.Model):
         if self.flow_task:
             if self.finished:
                 if hasattr(self.flow_task, 'task_result_summary'):
-                    return Template(self.flow_task.task_result_summary or "").render(Context({
+                    return Template(force_text(self.flow_task.task_result_summary or "")).render(Context({
                         'process': self.flow_process,
                         'task': self,
                         'flow_class': self.flow_task.flow_class,
                         'flow_task': self.flow_task}))
             else:
                 if hasattr(self.flow_task, 'task_description'):
-                    return self.flow_task.task_description or ""
+                    return Template(force_text(self.flow_task.task_description or "")).render(Context({
+                        'process': self.flow_process,
+                        'task': self,
+                        'flow_class': self.flow_task.flow_class,
+                        'flow_task': self.flow_task}))
 
         return ""
 
@@ -141,18 +142,6 @@ class AbstractTask(models.Model):
                 self.status)
         return "<Task {}> - {}".format(self.pk, self.status)
 
-    def refresh_from_db(self, using=None, fields=None, **kwargs):
-        """Backport for django 1.6."""
-        if hasattr(models.Model, 'refresh_from_db'):
-            super(AbstractTask, self).refresh_from_db(using=using, fields=fields, **kwargs)
-        else:
-            """
-            django 1.6, only basic fallback
-            """
-            db_instance = self.__class__._default_manager.filter(pk=self.pk).get()
-            for field in self._meta.concrete_fields:
-                setattr(self, field.attname, getattr(db_instance, field.attname))
-
     class Meta:  # noqa D101
         abstract = True
 
@@ -161,16 +150,25 @@ class Process(AbstractProcess):
     """Default viewflow Process model."""
 
     class Meta:  # noqa D101
-        verbose_name_plural = 'Process list'
+        ordering = ['-created']
+        verbose_name = _('Process')
+        verbose_name_plural = _('Process list')
 
 
 class Task(AbstractTask):
     """Default viewflow Task model."""
 
-    process = models.ForeignKey(Process)
+    process = models.ForeignKey(Process, on_delete=models.CASCADE, verbose_name=_('Process'))
 
-    owner = models.ForeignKey(settings.AUTH_USER_MODEL, blank=True, null=True, db_index=True)
-    external_task_id = models.CharField(max_length=50, blank=True, null=True, db_index=True)
-    owner_permission = models.CharField(max_length=255, blank=True, null=True)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, blank=True, null=True, db_index=True,
+        on_delete=models.CASCADE, verbose_name=_('Owner'))
+    external_task_id = models.CharField(_('External Task ID'), max_length=50, blank=True, null=True, db_index=True)
+    owner_permission = models.CharField(_('Permission'), max_length=255, blank=True, null=True)
 
-    comments = models.TextField(blank=True, null=True)
+    comments = models.TextField(_('Comments'), blank=True, null=True)
+
+    class Meta:  # noqa D101
+        verbose_name = _('Task')
+        verbose_name_plural = _('Tasks')
+        ordering = ['-created']

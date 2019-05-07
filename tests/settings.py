@@ -13,8 +13,6 @@ SECRET_KEY = 'ratn!684yf7ewt-%j%afwf7et9c=!oan$=w6#)fn#4u$ie4!as'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-TEMPLATE_DEBUG = True
-
 ALLOWED_HOSTS = []
 
 
@@ -37,11 +35,11 @@ INSTALLED_APPS = (
     # 'demo.shipment',
 )
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 )
@@ -60,27 +58,23 @@ DATABASES = {
 }
 
 
-class DisableMigrations(object):
+MIGRATION_MODULES = {
+    'frontend': None,
+    'material': None,
+    'admin': None,
+    'auth': None,
+    'contenttypes': None,
+    'sessions': None,
+    'messages': None,
+    'staticfiles': None,
+    'viewflow_frontend': None,
+    'viewflow': None,
+    'tests': None,
+    'customnode': None,
+    'helloworld': None,
+    'shipment': None,
+}
 
-    def __contains__(self, item):
-        return True
-
-    def __getitem__(self, item):
-        return "notmigrations"
-
-MIGRATION_MODULES = DisableMigrations()
-
-
-# Templates
-try:
-    from django.conf.global_settings import TEMPLATE_CONTEXT_PROCESSORS
-    TEMPLATE_CONTEXT_PROCESSORS = list(TEMPLATE_CONTEXT_PROCESSORS) + [
-        'django.core.context_processors.request',
-    ]
-except ImportError:
-    """
-    Ok, on django 1.10
-    """
 
 TEMPLATES = [
     {
@@ -125,13 +119,11 @@ STATIC_URL = '/static/'
 
 # Celery
 
-INSTALLED_APPS += ('kombu.transport.django', )
-BROKER_URL = 'django://'
-
 CELERYD_CONCURRENCY = 1
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_BROKER_URL = 'redis://localhost:6379/10'
 
 CELERY_IMPORTS = [
     os.path.join(root, filename)[len(BASE_DIR)+1: -3].replace('/', '.')
@@ -140,16 +132,3 @@ CELERY_IMPORTS = [
     if filename.startswith('test_') and filename.endswith('.py')]
 
 DJKOMBU_POLLING_INTERVAL = 0.05
-
-
-# Jenkins
-
-INSTALLED_APPS = ('django_jenkins',) + INSTALLED_APPS
-
-JENKINS_TASKS = (
-    'django_jenkins.tasks.run_flake8',
-)
-
-PROJECT_APPS = ('viewflow', )
-
-COVERAGE_EXCLUDES = ['tests']

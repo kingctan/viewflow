@@ -12,14 +12,14 @@ class ThisObject(object):
 
     @property
     def owner(self):
-        """Return user that was assogned to the task."""
+        """Return user that was assigned to the task."""
         def get_task_owner(activation):
             flow_class = activation.process.flow_class
             task_node = flow_class._meta.node(self.name)
-            task = flow_class.task_class.objects.get(
+            task = flow_class.task_class.objects.order_by('-id').filter(
                 process=activation.process,
                 flow_task=task_node,
-                status=STATUS.DONE)
+                status=STATUS.DONE).first()
             return task.owner
         return get_task_owner
 
@@ -27,12 +27,12 @@ class ThisObject(object):
 class This(object):
     """Helper for building forward referenced flow task.
 
-    Therationaly is ability to specify referencies to the class
-    attribute and methods before they declated.
+    The rationale is ability to specify references to the class
+    attributes and methods before they are declared.
 
     `this` is like a `self` but for the class body.
 
-    The referencies are resolved by the metaclass at the end of the
+    The references are resolved by the metaclass at the end of the
     flow construction.
 
     Example::
@@ -85,7 +85,7 @@ class Edge(object):
     def edge_class(self):
         """Type of the edge.
 
-        Viewfow uses `next`, 'cond_true', `cond_false` and `defailt`
+        Viewflow uses `next`, 'cond_true', `cond_false` and `default`
         edge classes.
 
         Edge class could be used as a hint for edge visualization.
@@ -93,7 +93,7 @@ class Edge(object):
         return self._edge_class
 
     def __str__(self):
-        return "[%s] %s ---> %s".format(
+        return "[{}] {} ---> {}".format(
             self._edge_class, self._src, self._dst)
 
 
@@ -139,7 +139,7 @@ class Node(object):
         """
         Called when flow class setup finished.
 
-        Subclasses could perform additional initialisation here.
+        Subclasses could perform additional initialization here.
         """
 
     def urls(self):

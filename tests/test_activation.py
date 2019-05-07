@@ -1,8 +1,12 @@
+try:
+    from unittest import mock
+except ImportError:
+    import mock
+
 from django.test import TestCase
 
 from viewflow import activation, flow, lock
 from viewflow.activation import STATUS
-from viewflow.compat import mock
 
 
 class Test(TestCase):
@@ -154,7 +158,7 @@ class Test(TestCase):
                 self.throw_on_schedule_error = kwargs.pop('throw_on_schedule_error', False)
                 super(JobActivation, self).__init__(*args, **kwargs)
 
-            def async(self):
+            def run_async(self):
                 if self.throw_on_schedule_error:
                     raise ValueError('Job scheduler error')
 

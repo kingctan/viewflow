@@ -52,7 +52,7 @@ class StartSignal(mixins.TaskDescriptionMixin,
         return self.receiver(sender=sender, flow_task=self, **signal_kwargs)
 
     def ready(self):
-        """Resolve internal `this`-referencies. and subscribe to the signal."""
+        """Resolve internal `this`-references. and subscribe to the signal."""
         if isinstance(self.receiver, ThisObject):
             self.receiver = getattr(self.flow_class.instance, self.receiver.name)
 
@@ -116,7 +116,7 @@ class Signal(mixins.TaskDescriptionMixin,
         """Signal handler."""
         if self.task_loader is None:
             if 'task' not in signal_kwargs:
-                raise FlowRuntimeError('{} have no task_loader and got signal without task instance', self.name)
+                raise FlowRuntimeError('{} have no task_loader and got signal without task instance'.format(self.name))
             return self.receiver(sender=sender, **signal_kwargs)
         else:
             task = self.task_loader(self, sender=sender, **signal_kwargs)
@@ -125,10 +125,10 @@ class Signal(mixins.TaskDescriptionMixin,
                     raise FlowRuntimeError("The task_loader didn't return any task for {}\n{}".format(
                         self.name, signal_kwargs))
             else:
-                return self.receiver(sender=sender, task=task, **signal_kwargs)
+                return self.receiver(sender=sender, _task=task, **signal_kwargs)
 
     def ready(self):
-        """Resolve internal `this`-referencies. and subscribe to the signal."""
+        """Resolve internal `this`-references. and subscribe to the signal."""
         if isinstance(self.receiver, ThisObject):
             self.receiver = getattr(self.flow_class.instance, self.receiver.name)
         if isinstance(self.task_loader, ThisObject):

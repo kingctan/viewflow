@@ -1,7 +1,7 @@
 from copy import copy
 from textwrap import dedent
 from django.conf.urls import url
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from . import Edge
 
@@ -64,11 +64,11 @@ class DetailViewMixin(object):
 
     def can_view(self, user, task):
         """Check if user has a view task detail permission."""
-        return user.has_perm(self.flow_class.instance.view_permission_name)
+        return user.has_perm(self.flow_class._meta.view_permission_name)
 
 
 class UndoViewMixin(object):
-    """Undo a completd task."""
+    """Undo a completed task."""
 
     undo_view_class = None
 
@@ -204,10 +204,10 @@ class PermissionMixin(object):
         """
         Make task available for users with specific permission.
 
-        Accespts permissions name or callable :: Callable[Activation] -> string::
+        Accepts permissions name or callable :: Callable[Activation] -> string::
 
             .Permission('my_app.can_approve')
-            .Permission(lambda process: 'my_app.department_manager_{}'.format(process.depratment.pk))
+            .Permission(lambda process: 'my_app.department_manager_{}'.format(process.department.pk))
 
         Task specific permission could be auto created during migration::
 
@@ -215,7 +215,7 @@ class PermissionMixin(object):
             do_task = View().Permission(auto_create=True)
 
             # You can specify permission codename and description right here
-            # The following creates `processcls_app.can_execure_task` permission
+            # The following creates `processcls_app.can_execute_task` permission
             do_task = View().Permission('can_execute_task', help_text='Custom text', auto_create=True)
         """
         if permission is None and not auto_create:
@@ -250,8 +250,10 @@ class PermissionMixin(object):
                 if codename == self._owner_permission:
                     break
             else:
-                self.flow_class.process_class._meta.permissions.append(
-                    (self._owner_permission, self._owner_permission_help_text))
+                self.flow_class.process_class._meta.permissions = (
+                    tuple(self.flow_class.process_class._meta.permissions) +
+                    ((self._owner_permission, self._owner_permission_help_text), )
+                )
 
             self._owner_permission = '{}.{}'.format(
                 self.flow_class.process_class._meta.app_label,
@@ -287,11 +289,14 @@ class TaskDescriptionMixin(object):
         if task_result_summary:
             self.task_result_summary = task_result_summary
 
+        if self.task_result_summary is None:
+            self.task_result_summary = self.task_title
+
         super(TaskDescriptionMixin, self).__init__(**kwargs)
 
 
 class TaskDescriptionViewMixin(TaskDescriptionMixin):
-    """Extract task desctiption from the view docstring."""
+    """Extract task description from the view docstring."""
 
     def __init__(self, view_or_class=None, **kwargs):  # noqa D102
         super(TaskDescriptionViewMixin, self).__init__(**kwargs)
@@ -305,6 +310,9 @@ class TaskDescriptionViewMixin(TaskDescriptionMixin):
                     self.task_description = dedent(docstring[1]).strip()
             if hasattr(view_or_class, 'task_result_summary') and self.task_result_summary is None:
                 self.task_result_summary = view_or_class.task_result_summary
+
+        if self.task_result_summary is None:
+            self.task_result_summary = self.task_title
 
 
 class ViewArgsMixin(object):

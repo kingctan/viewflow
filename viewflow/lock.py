@@ -1,4 +1,5 @@
 """Prevents inconsistent db updates for flow."""
+from __future__ import unicode_literals
 
 import time
 import random
@@ -27,7 +28,7 @@ class NoLock(object):
 
 class SelectForUpdateLock(object):
     """
-    Databace lock uses `select ... for update` on the process instance row.
+    Database lock uses `select ... for update` on the process instance row.
 
     Recommended to use with PostgreSQL.
     """
@@ -42,8 +43,7 @@ class SelectForUpdateLock(object):
                 with transaction.atomic():
                     try:
                         process = flow_class.process_class._default_manager.filter(pk=process_pk)
-                        if not process.select_for_update(nowait=self.nowait).exists():
-                            raise DatabaseError('Process not exists')
+                        process.select_for_update(nowait=self.nowait).exists()
                     except DatabaseError:
                         if i != self.attempts - 1:
                             sleep_time = (((i + 1) * random.random()) + 2 ** i) / 2.5
@@ -58,7 +58,7 @@ class SelectForUpdateLock(object):
 
 class CacheLock(object):
     """
-    Task lock based on Django's cache.
+    Task lock based on Django cache.
 
     Use it if primary cache backend has transactional `add` functionality,
     like `memcached`.
@@ -69,7 +69,7 @@ class CacheLock(object):
             lock_impl = CacheLock(cache=caches['locks'])
 
     The example uses a different cache. The default cache
-    is Django's ``default`` cache configuration.
+    is Django ``default`` cache configuration.
     """
 
     def __init__(self, cache=default_cache, attempts=5, expires=120):  # noqa D102
@@ -83,11 +83,8 @@ class CacheLock(object):
             key = 'django-viewflow-lock-{}/{}'.format(flow_class._meta.flow_label, process_pk)
 
             for i in range(self.attempts):
-                process = flow_class.process_class._default_manager.filter(pk=process_pk)
-                if process.exists():
-                    stored = self.cache.add(key, 1, self.expires)
-                    if stored:
-                        break
+                if self.cache.add(key, 1, self.expires):
+                    break
                 if i != self.attempts - 1:
                     sleep_time = (((i + 1) * random.random()) + 2 ** i) / 2.5
                     time.sleep(sleep_time)

@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from django.utils.six.moves.urllib.parse import quote as urlquote
 
 from django.core.exceptions import PermissionDenied
@@ -6,6 +8,7 @@ from django.shortcuts import redirect
 from django.views import generic
 from django.utils.decorators import method_decorator
 from django.utils.http import is_safe_url
+from django.utils.translation import ugettext_lazy as _
 
 from ...decorators import flow_view
 from .actions import BaseTaskActionView
@@ -13,7 +16,7 @@ from .mixins import MessageUserMixin
 from .utils import get_next_task_url
 
 
-class BaseFlowViewMixin(object):
+class BaseFlowMixin(object):
     """Mixin for a task views."""
 
     def get_context_data(self, **kwargs):
@@ -21,7 +24,7 @@ class BaseFlowViewMixin(object):
 
         :keyword activation: the task activation instance
         """
-        context = super(BaseFlowViewMixin, self).get_context_data(**kwargs)
+        context = super(BaseFlowMixin, self).get_context_data(**kwargs)
         context['activation'] = self.activation
         return context
 
@@ -55,7 +58,7 @@ class BaseFlowViewMixin(object):
         self.activation = request.activation
 
         if not self.activation.prepare.can_proceed():
-            self.error('Task {task} cannot be executed.')
+            self.error(_('Task {task} cannot be executed.'))
             return redirect(self.activation.flow_task.get_task_url(
                 self.activation.task, url_type='detail', user=request.user,
                 namespace=self.request.resolver_match.namespace))
@@ -64,29 +67,30 @@ class BaseFlowViewMixin(object):
             raise PermissionDenied
 
         self.activation.prepare(request.POST or None)
-        return super(BaseFlowViewMixin, self).dispatch(request, **kwargs)
+        return super(BaseFlowMixin, self).dispatch(request, **kwargs)
 
 
-class FlowViewMixin(MessageUserMixin, BaseFlowViewMixin):
+class FlowMixin(MessageUserMixin, BaseFlowMixin):
     """Mixin for flow views completes activation on a form submit."""
 
     def activation_done(self, *args, **kwargs):
         """Finish the task activation."""
         self.activation.done()
-        self.success('Task {task} has been completed.')
+        self.success(_('Task {task} has been completed.'))
         if self.activation.process.finished:
-            self.success('Process {process} has been completed.')
+            self.success(_('Process {process} has been completed.'))
 
     def form_valid(self, *args, **kwargs):
         """If the form is valid, save the associated model and finish the task."""
-        super(FlowViewMixin, self).form_valid(*args, **kwargs)
+        super(FlowMixin, self).form_valid(*args, **kwargs)
         self.activation_done(*args, **kwargs)
         return HttpResponseRedirect(self.get_success_url())
 
 
-class UpdateProcessView(FlowViewMixin, generic.UpdateView):
-    """Generic view to update a process fields."""
+FlowViewMixin = FlowMixin  # TODO Remove
 
+
+class UpdateProcessView(FlowMixin, generic.UpdateView):  # noqa D101
     def __init__(self, *args, **kwargs):  # noqa D102
         super(UpdateProcessView, self).__init__(*args, **kwargs)
         if self.form_class is None and self.fields is None:
@@ -147,7 +151,7 @@ class AssignTaskView(MessageUserMixin, generic.TemplateView):
             namespace=self.request.resolver_match.namespace)
 
         back = self.request.GET.get('back', None)
-        if back and not is_safe_url(url=back, host=self.request.get_host()):
+        if back and not is_safe_url(url=back, allowed_hosts={self.request.get_host()}):
             back = '/'
 
         if '_continue' in self.request.POST and back:
@@ -168,21 +172,21 @@ class AssignTaskView(MessageUserMixin, generic.TemplateView):
         """
         if '_assign' or '_continue' in request.POST:
             self.activation.assign(self.request.user)
-            self.success('Task {task} has been assigned')
+            self.success(_('Task {task} has been assigned'))
             return HttpResponseRedirect(self.get_success_url())
         else:
             return self.get(request, *args, **kwargs)
 
     @method_decorator(flow_view)
     def dispatch(self, request, *args, **kwargs):
-        """Check permisions and assign task to the current user."""
+        """Check permissions and assign task to the current user."""
         self.activation = request.activation
 
-        if request.user is None or request.user.is_anonymous():
+        if request.user is None or request.user.is_anonymous:
             raise PermissionDenied
 
         if not self.activation.assign.can_proceed():
-            self.error('Task {task} cannot be assigned to you')
+            self.error(_('Task {task} cannot be assigned to you'))
             return redirect(self.activation.flow_task.get_task_url(
                 self.activation.task, url_type='detail', user=request.user,
                 namespace=self.request.resolver_match.namespace))
@@ -194,12 +198,12 @@ class AssignTaskView(MessageUserMixin, generic.TemplateView):
 
 
 class UnassignTaskView(BaseTaskActionView):
-    """Unassign task from the current owner."""
+    """Deassign task from the current owner."""
 
     action_name = 'unassign'
 
     def can_proceed(self):
-        """Check that task is assigned and user has rights to unassign it."""
+        """Check that task is assigned and user has rights to deassign it."""
         if self.activation.unassign.can_proceed():
             return self.activation.flow_task.can_unassign(self.request.user, self.activation.task)
         return False
@@ -207,4 +211,4 @@ class UnassignTaskView(BaseTaskActionView):
     def perform(self):
         """Unassign the task from the current owner."""
         self.activation.unassign()
-        self.success('Task {task} has been unassigned.')
+        self.success(_('Task {task} has been unassigned.'))

@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 
 from django.db import models, migrations
-
+import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
@@ -14,13 +14,11 @@ class Migration(migrations.Migration):
         migrations.CreateModel(
             name='HelloWorldProcess',
             fields=[
-                ('process_ptr', models.OneToOneField(to='viewflow.Process', primary_key=True, parent_link=True, serialize=False, auto_created=True)),
+                ('process_ptr', models.OneToOneField(to='viewflow.Process', primary_key=True, parent_link=True, serialize=False, auto_created=True, on_delete=django.db.models.deletion.CASCADE)),
                 ('text', models.CharField(max_length=50)),
                 ('approved', models.BooleanField(default=False)),
             ],
-            options={
-                'abstract': False,
-            },
+            options={'verbose_name': 'Hello Request'},
             bases=('viewflow.process',),
         ),
         migrations.CreateModel(

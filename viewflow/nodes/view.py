@@ -1,10 +1,11 @@
 from copy import copy
 
 from django.conf.urls import url
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 
 from .. import Event, Task, mixins
 from ..activation import StartActivation, ViewActivation, STATUS
+from ..utils import is_owner
 
 
 class BaseStart(mixins.TaskDescriptionViewMixin,
@@ -86,7 +87,7 @@ class Start(mixins.PermissionMixin, BaseStart):
                 url_name = '{}:{}'.format(namespace, self.name)
                 return reverse(url_name)
 
-        return super(BaseStart, self).get_task_url(task, url_type=url_type, namespace=namespace, **kwargs)
+        return super(Start, self).get_task_url(task, url_type=url_type, namespace=namespace, **kwargs)
 
     def can_execute(self, user, task=None):
         """Check user permission to start a flow."""
@@ -100,7 +101,7 @@ class Start(mixins.PermissionMixin, BaseStart):
                 return self._owner(user)
             else:
                 owner = get_user_model()._default_manager.get(**self._owner)
-                return owner == user
+                return is_owner(owner, user)
 
         elif self._owner_permission:
             obj = None
@@ -184,7 +185,7 @@ class View(mixins.PermissionMixin, BaseView):
         """
         Instantiate a View node.
 
-        :keyword assign_view: Overides default AssgnView for the node
+        :keyword assign_view: Overides default AssignView for the node
         :keyword unassign_view: Overides default UnassignView for the node
         """
         self._assign_view = kwargs.pop('assign_view', None)
@@ -280,7 +281,7 @@ class View(mixins.PermissionMixin, BaseView):
             return False
 
         # user not logged in
-        if user is None or user.is_anonymous():
+        if user is None or user.is_anonymous:
             return False
 
         # available for everyone
@@ -304,19 +305,19 @@ class View(mixins.PermissionMixin, BaseView):
             return False
 
         # user not logged in
-        if user is None or user.is_anonymous():
+        if user is None or user.is_anonymous:
             return False
 
         # Assigned to the same user
-        if task.owner_id == user.pk:
+        if is_owner(task.owner, user):
             return True
 
         # User have flow management permissions
-        return user.has_perm(self.flow_class.instance.manage_permission_name)
+        return user.has_perm(self.flow_class._meta.manage_permission_name)
 
     def can_execute(self, user, task):
         """Check user premition to execute the task."""
         if task.owner_permission is None and task.owner is None:
             return True
 
-        return task.owner == user
+        return is_owner(task.owner, user)

@@ -1,19 +1,25 @@
 {% extends 'viewflow/flow/base_task.html' %}
-{% load viewflow viewflow_frontend %}
+{% load i18n material_frontend viewflow viewflow_frontend %}
 
 {% block breadcrumbs_items_extra %}
-<a class="active">{{ view.action_name|title }}</a>
+<a class="active">{% trans 'Unassign' %}</a>
 {% endblock %}
 
+{% block task_title %}{{ block.super }} :: {% trans 'Unassign' %}{% endblock %}
 
 {% block task_actions %}
-<div class="col s3">
-    <a class="btn btn-flat black-text" href="{% flowurl activation.task 'detail' %}?{{ request|query_back:'copy' }}">detail</a>
-</div>
-<div class="col s9 right-align">
-    <form role="form" method="POST" style="display:inline-block">
+<div class="card-action">
+  <div class="left">
+    <a class="btn btn-flat black-text" href="{% flowurl activation.task 'detail' %}?{{ request|query_back }}">{% trans 'Detail' %}</a>
+  </div>
+  <div class="right">
+    <dmc-form>
+      <form role="form" method="POST" style="display:inline-block">
         {% csrf_token %}
-        <button type="submit" name="run_action" class="btn btn-flat">Confirm {{ view.action_name }}</button>
-    </form>
+        <button type="submit" name="run_action" class="btn btn-flat">{% trans 'Confirm' %}</button>
+      </form>
+    </dmc-form>
+  </div>
+  <div style="clear:both"></div>
 </div>
 {% endblock %}

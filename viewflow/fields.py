@@ -1,13 +1,16 @@
 from __future__ import unicode_literals
 
 from django.db import models
-from .compat import get_app_package, get_containing_app_data, import_string
+from django.utils.module_loading import import_string
+from django.utils.six import string_types, with_metaclass
+
+from .compat import get_app_package, get_containing_app_data
 from .exceptions import FlowRuntimeError
 from .token import Token
 
 
 def import_flow_by_ref(flow_strref):
-    """Return flow class by flow string refernece."""
+    """Return flow class by flow string reference."""
     app_label, flow_path = flow_strref.split('/')
     return import_string('{}.{}'.format(get_app_package(app_label), flow_path))
 
@@ -51,7 +54,7 @@ class ClassValueWrapper(object):
 
 
 class _SubfieldBase(type):
-    """Backpoort from django 1.8."""
+    """Backport from django 1.8."""
 
     def __new__(cls, name, bases, attrs):
         new_class = super(_SubfieldBase, cls).__new__(cls, name, bases, attrs)
@@ -62,7 +65,7 @@ class _SubfieldBase(type):
 
 
 class _Creator(object):
-    """Backpoort from django 1.8."""
+    """Backport from django 1.8."""
 
     def __init__(self, field):
         self.field = field
@@ -87,9 +90,7 @@ def _make_contrib(superclass, func=None):
     return contribute_to_class
 
 
-class FlowReferenceField(models.CharField, metaclass=_SubfieldBase):
-    """Flow class."""
-
+class FlowReferenceField(with_metaclass(_SubfieldBase, models.CharField)):
     description = """Flow class reference field,
     stores flow as app_label/flows.FlowName> to
     avoid possible collisions with app name changes"""
@@ -98,8 +99,8 @@ class FlowReferenceField(models.CharField, metaclass=_SubfieldBase):
         kwargs.setdefault('max_length', 250)
         super(FlowReferenceField, self).__init__(*args, **kwargs)
 
-    def to_python(self, value):  # noqa D1o2
-        if isinstance(value, str) and value:
+    def to_python(self, value):  # noqa D102
+        if isinstance(value, string_types) and value:
             return import_flow_by_ref(value)
         return value
 
@@ -119,72 +120,47 @@ class FlowReferenceField(models.CharField, metaclass=_SubfieldBase):
         return get_flow_ref(value)
 
     def value_to_string(self, obj):  # noqa D1o2
-        value = self._get_val_from_obj(obj)
+        value = super(FlowReferenceField, self).value_from_object(obj)
         return self.get_prep_value(value)
 
 
-class TaskReferenceField(models.CharField, metaclass=_SubfieldBase):
-    """Flow node instance."""
-
-    def __init__(self, *args, **kwargs):  # noqa D102
+class TaskReferenceField(with_metaclass(_SubfieldBase, models.CharField)):
+    def __init__(self, *args, **kwargs):
         kwargs.setdefault('max_length', 255)
         super(TaskReferenceField, self).__init__(*args, **kwargs)
 
-    def to_python(self, value):  # noqa D102
-        if isinstance(value, str) and value:
+    def to_python(self, value):
+        if isinstance(value, string_types) and value:
             return import_task_by_ref(value)
         return value
 
     def get_prep_value(self, value):  # noqa D102
         if value is None or value == '':
             return value
-        elif not isinstance(value, str):
+        elif not isinstance(value, string_types):
             return get_task_ref(value)
         return value
 
     def value_to_string(self, obj):  # noqa D102
-        value = self._get_val_from_obj(obj)
+        value = super(TaskReferenceField, self).value_from_object(obj)
         return self.get_prep_value(value)
 
 
-class TokenField(models.CharField, metaclass=_SubfieldBase):
-    """Wrapper for `viewflow.token.Token` around string values."""
-
-    def __init__(self, *args, **kwargs):  # noqa D102
+class TokenField(with_metaclass(_SubfieldBase, models.CharField)):
+    def __init__(self, *args, **kwargs):
         kwargs.setdefault('max_length', 150)
         if 'default' in kwargs:
             default = kwargs['default']
-            if isinstance(default, str):
+            if isinstance(default, string_types):
                 kwargs['default'] = Token(default)
         super(TokenField, self).__init__(*args, **kwargs)
 
     def to_python(self, value):  # noqa D102
-        if isinstance(value, str) and value:
+        if isinstance(value, string_types) and value:
             return Token(value)
         return value
 
-    def get_prep_value(self, value):  # noqa D102
-        if not isinstance(value, str) and value:
+    def get_prep_value(self, value):
+        if not isinstance(value, string_types) and value:
             return value.token
         return super(TokenField, self).get_prep_value(value)
-
-
-try:
-    """
-    Django 1.6 migrations.
-    """
-    from south.modelsinspector import add_introspection_rules
-    add_introspection_rules([], ["^viewflow\.fields\.FlowReferenceField"])
-    add_introspection_rules([(
-        (TaskReferenceField,),
-        [],
-        {'default': ["default", {'ignore_if': 'default'}]}  # HACK always ignore b/c south have no support for callables
-    )], ["^viewflow\.fields\.TaskReferenceField"])
-    add_introspection_rules([(
-        (TokenField,),
-        [],
-        {'default': ["default.token", {}]}
-    )], ["^viewflow\.fields\.TokenField"])
-
-except ImportError:
-    pass

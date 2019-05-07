@@ -1,13 +1,13 @@
 from django.contrib import messages
-from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
-from django.utils.http import is_safe_url
+from django.urls import reverse
 from django.utils.decorators import method_decorator
-from django.utils.timezone import now
-from django.views import generic
+from django.utils.http import is_safe_url
 from django.utils.safestring import mark_safe
+from django.utils.timezone import now
 from django.utils.translation import ugettext_lazy as _
+from django.views import generic
 
 from ...activation import STATUS
 from ...decorators import flow_view
@@ -22,6 +22,7 @@ class BaseTaskActionView(MessageUserMixin, generic.TemplateView):
     """Base class for the basic flow action views."""
 
     action_name = None
+    action_title = None
 
     def can_proceed(self):
         """Check that action can be executed.
@@ -32,7 +33,7 @@ class BaseTaskActionView(MessageUserMixin, generic.TemplateView):
 
     def perform(self):
         """
-        Peform the action.
+        Perform the action.
 
         Subclasses should override it.
         """
@@ -110,6 +111,7 @@ class UndoTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     """Undo the task."""
 
     action_name = 'undo'
+    action_title = _('Undo')
 
     def can_proceed(self):
         """Check that node can be undone."""
@@ -118,13 +120,14 @@ class UndoTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     def perform(self):
         """Undo the node."""
         self.activation.undo()
-        self.success('Task {task} has been undone.')
+        self.success(_('Task {task} has been undone.'))
 
 
 class CancelTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     """Cancel task view."""
 
     action_name = 'cancel'
+    action_title = _('Cancel')
 
     def can_proceed(self):
         """Check that node can be cancelled."""
@@ -133,16 +136,17 @@ class CancelTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     def perform(self):
         """Cancel the node."""
         self.activation.cancel()
-        self.success('Task {task} has been canceled.')
+        self.success(_('Task {task} has been canceled.'))
 
 
 class PerformTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     """Non-interactive task that cancelled and need to be started manually."""
 
     action_name = 'execute'
+    action_title = _('Perform')
 
     def can_proceed(self):
-        """Check that gateway can be reexecuted."""
+        """Check that gateway can be re-executed."""
         return self.activation.perform.can_proceed()
 
     def perform(self):
@@ -155,13 +159,14 @@ class ActivateNextTaskView(FlowTaskManagePermissionMixin, BaseTaskActionView):
     """Activate next task without interactive task redone."""
 
     action_name = 'activate_next'
+    action_title = _('Activate Next')
 
     def can_proceed(self):
-        """Check that node in a state allows to activate ountgoing nodes."""
+        """Check that node in a state allows to activate outgoing nodes."""
         return self.activation.activate_next.can_proceed()
 
     def perform(self):
-        """Activite oungoing nodes."""
+        """Activate outgoing nodes."""
         self.activation.activate_next()
 
 
@@ -196,12 +201,12 @@ class CancelProcessView(FlowManagePermissionMixin, generic.DetailView):
         kwargs.update({
             'process': process_link,
         })
-        message = mark_safe(_(message).format(**kwargs))
+        message = mark_safe(message.format(**kwargs))
 
         messages.add_message(self.request, level, message, fail_silently=fail_silently)
 
     def success(self, message, fail_silently=True, **kwargs):
-        """Notification about sucessful operation."""
+        """Notification about successful operation."""
         self.report(message, level=messages.SUCCESS, fail_silently=fail_silently, **kwargs)
 
     def error(self, message, fail_silently=True, **kwargs):
@@ -233,7 +238,7 @@ class CancelProcessView(FlowManagePermissionMixin, generic.DetailView):
         """Continue to the flow index or redirect according `?back` parameter."""
         if 'back' in self.request.GET:
             back_url = self.request.GET['back']
-            if not is_safe_url(url=back_url, host=self.request.get_host()):
+            if not is_safe_url(url=back_url, allowed_hosts={self.request.get_host()}):
                 back_url = '/'
             return back_url
 
@@ -244,12 +249,12 @@ class CancelProcessView(FlowManagePermissionMixin, generic.DetailView):
         self.object = self.get_object()
 
         if self.object.status in [STATUS.DONE, STATUS.CANCELED]:
-            self.error('Process {process} can not be canceled.')
+            self.error(_('Process {process} can not be canceled.'))
             return HttpResponseRedirect(self.get_success_url())
         elif '_cancel_process' in request.POST:
             self._cancel_active_tasks()
             self._cancel_process()
-            self.success('Process {process} has been canceled.')
+            self.success(_('Process {process} has been canceled.'))
             return HttpResponseRedirect(self.get_success_url())
         else:
             return self.get(request, *args, **kwargs)

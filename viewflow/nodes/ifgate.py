@@ -1,11 +1,11 @@
 from copy import copy
 
-from .. import Gateway, Edge, mixins
+from .. import Gateway, Edge, ThisObject, mixins
 from ..activation import Activation, AbstractGateActivation
 
 
 class IfActivation(AbstractGateActivation):
-    """Condifinally activate one of outgoing nodes."""
+    """Conditionally activate one of outgoing nodes."""
 
     def __init__(self, **kwargs):  # noqa D102
         self.condition_result = None
@@ -17,7 +17,7 @@ class IfActivation(AbstractGateActivation):
 
     @Activation.status.super()
     def activate_next(self):
-        """Condifinally activate one of outgoing nodes."""
+        """Conditionally activate one of outgoing nodes."""
         if self.condition_result:
             self.flow_task._on_true.activate(prev_activation=self, token=self.task.token)
         else:
@@ -63,6 +63,10 @@ class If(mixins.TaskDescriptionMixin,
     def _resolve(self, resolver):
         self._on_true = resolver.get_implementation(self._on_true)
         self._on_false = resolver.get_implementation(self._on_false)
+
+    def ready(self):
+        if isinstance(self._condition, ThisObject):
+            self._condition = getattr(self.flow_class.instance, self._condition.name)
 
     def Then(self, node):
         """Node activated if condition is True."""

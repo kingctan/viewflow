@@ -1,5 +1,7 @@
+from __future__ import unicode_literals
+
 from itertools import count
-from .compat import deconstructible
+from django.utils.deconstruct import deconstructible
 
 
 @deconstructible
@@ -36,7 +38,7 @@ class Token(object):
 
     def get_common_split_prefix(self, join_token, task_pk):
         """Common prefix for tokens."""
-        if join_token == self.token:
+        if self == join_token:
             return '{}/{}_'.format(self.token, task_pk)
         return '{}_'.format(self.token.rsplit('_', 1)[0])
 

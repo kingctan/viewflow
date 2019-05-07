@@ -1,9 +1,11 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, permission_required
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.safestring import mark_safe
 from django.utils.translation import ugettext_lazy as _
+
+from ...exceptions import FlowRuntimeError
 
 
 class LoginRequiredMixin(object):
@@ -19,7 +21,7 @@ class FlowViewPermissionMixin(object):
 
     def dispatch(self, *args, **kwargs):  # noqa D102
         self.flow_class = kwargs['flow_class']
-        return permission_required(self.flow_class.instance.view_permission_name)(
+        return permission_required(self.flow_class._meta.view_permission_name)(
             super(FlowViewPermissionMixin, self).dispatch)(*args, **kwargs)
 
 
@@ -28,7 +30,7 @@ class FlowManagePermissionMixin(object):
 
     def dispatch(self, *args, **kwargs):  # noqa D102
         self.flow_class = kwargs['flow_class']
-        return permission_required(self.flow_class.instance.manage_permission_name)(
+        return permission_required(self.flow_class._meta.manage_permission_name)(
             super(FlowManagePermissionMixin, self).dispatch)(*args, **kwargs)
 
 
@@ -38,7 +40,7 @@ class FlowTaskManagePermissionMixin(object):
     def dispatch(self, *args, **kwargs):  # noqa D102
         self.flow_task = kwargs['flow_task']
         self.flow_class = self.flow_task.flow_class
-        return permission_required(self.flow_class.instance.manage_permission_name)(
+        return permission_required(self.flow_class._meta.manage_permission_name)(
             super(FlowTaskManagePermissionMixin, self).dispatch)(*args, **kwargs)
 
 
@@ -84,7 +86,7 @@ class MessageUserMixin(object):
         messages.add_message(self.request, level, message, fail_silently=fail_silently)
 
     def success(self, message, fail_silently=True, **kwargs):
-        """Notification about sucessful operation."""
+        """Notification about successful operation."""
         self.report(message, level=messages.SUCCESS, fail_silently=fail_silently, **kwargs)
 
     def error(self, message, fail_silently=True, **kwargs):
@@ -96,6 +98,7 @@ class FlowListMixin(object):
     """Mixin for list view contains multiple flows."""
 
     ns_map = None
+    ns_map_absolute = False
 
     def __init__(self, *args, **kwargs):
         """
@@ -109,4 +112,22 @@ class FlowListMixin(object):
     @property
     def flows(self):
         """List of flow classes."""
-        return self.ns_map.values()
+        return self.ns_map.keys()
+
+    def get_flow_namespace(self, flow_class):
+        namespace = self.ns_map.get(flow_class)
+        if namespace is None:
+            raise FlowRuntimeError("{} are not registered in {}".format(flow_class, self))
+        if not self.ns_map_absolute:
+            return "{}:{}".format(self.request.resolver_match.namespace, namespace)
+
+    def get_process_url(self, process, url_type='detail'):
+        namespace = self.get_flow_namespace(process.flow_class)
+        return reverse('{}:{}'.format(namespace, url_type), args=[process.pk])
+
+    def get_task_url(self, task, url_type=None):
+        namespace = self.get_flow_namespace(task.process.flow_class)
+        return task.flow_task.get_task_url(
+            task, url_type=url_type if url_type else 'guess',
+            user=self.request.user,
+            namespace=namespace)

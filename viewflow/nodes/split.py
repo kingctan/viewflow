@@ -1,9 +1,10 @@
 from copy import copy
 
-from .. import Gateway, Edge, mixins
+from .. import Gateway, Edge, ThisObject, mixins
 from ..activation import Activation, AbstractGateActivation
 from ..exceptions import FlowRuntimeError
 from ..token import Token
+from .join import Join
 
 
 class SplitActivation(AbstractGateActivation):
@@ -34,7 +35,12 @@ class SplitActivation(AbstractGateActivation):
         """
         token_source = Token.split_token_source(self.task.token, self.task.pk)
 
-        for n, next_task in enumerate(self.next_tasks, 1):
+        next_tasks = (
+            [task for task in self.next_tasks if not isinstance(task, Join)] +
+            [task for task in self.next_tasks if isinstance(task, Join)]
+        )
+
+        for n, next_task in enumerate(next_tasks, 1):
             next_task.activate(prev_activation=self, token=next(token_source))
 
 
@@ -46,7 +52,7 @@ class Split(mixins.TaskDescriptionMixin,
             Gateway):
     """Parallel split gateway.
 
-    Activates outgoing tasks to execute concurently. Assumes that all
+    Activates outgoing tasks to execute concurrently. Assumes that all
     outgoing path converges at the same Join node.
 
     If Split has no nodes to activate, FlowRuntimeError would be
@@ -79,6 +85,15 @@ class Split(mixins.TaskDescriptionMixin,
         self._activate_next = \
             [(resolver.get_implementation(node), cond)
              for node, cond in self._activate_next]
+
+    def ready(self):
+        next_nodes = []
+
+        for node, condition in self._activate_next:
+            if isinstance(condition, ThisObject):
+                condition = getattr(self.flow_class.instance, condition.name)
+            next_nodes.append((node, condition))
+        self._activate_next = next_nodes
 
     @property
     def _branches(self):

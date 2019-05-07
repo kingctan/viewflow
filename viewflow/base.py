@@ -1,8 +1,14 @@
+"""
+Flow definition
+"""
+from __future__ import unicode_literals
+
 import re
 from collections import defaultdict
 from textwrap import dedent
 
 from django.conf.urls import include, url
+from django.utils.six import with_metaclass
 
 from . import Node, ThisObject, This, lock, models, forms
 from .compat import get_containing_app_data
@@ -58,12 +64,24 @@ class FlowMeta(object):
         return self._nodes_by_name.values()
 
     def node(self, name):
-        """Get node by name."""
+        """Return a node by name."""
         return self._nodes_by_name.get(name, None)
+
+    @property
+    def view_permission_name(self):
+        """Name of the permission to view flow instances."""
+        opts = self.flow_class.process_class._meta
+        return "{}.view_{}".format(opts.app_label, opts.model_name)
+
+    @property
+    def manage_permission_name(self):
+        """Name of the permission to administer flow instances."""
+        opts = self.flow_class.process_class._meta
+        return "{}.manage_{}".format(opts.app_label, opts.model_name)
 
 
 class FlowInstanceDescriptor(object):
-    """Singleton flow instance descriptior."""
+    """Singleton flow instance descriptor."""
 
     def __init__(self):  # noqa D102
         self.flow_instance = None
@@ -75,7 +93,11 @@ class FlowInstanceDescriptor(object):
 
 
 class FlowMetaClass(type):
-    """Metaclass for all flows."""
+    """The metaclass for all flows.
+
+    Instantiate a flow class singleton, and resolves all flow nodes
+    interlinks.
+    """
 
     def __new__(cls, class_name, bases, attrs):
         """Construct new flow class."""
@@ -136,21 +158,9 @@ class FlowMetaClass(type):
 
         # view process permission
         process_options = new_class.process_class._meta
-        if hasattr(process_options, 'default_permissions'):
-            # django 1.7
-            for permission in ('view', 'manage'):
-                if permission not in process_options.default_permissions:
-                    process_options.default_permissions += (permission,)
-        else:
-            # django 1.6
-            permissions = (('view_{}'.format(process_options.model_name),
-                            'View {}'.format(process_options.model_name)),
-                           ('manage_{}'.format(process_options.model_name),
-                            'Manage {}'.format(process_options.model_name)))
-
-            for permission in permissions:
-                if permission not in process_options.permissions:
-                    process_options.permissions.append(permission)
+        for permission in ('view', 'manage'):
+            if permission not in process_options.default_permissions:
+                process_options.default_permissions += (permission,)
 
         # done flow setup
         for name, node in nodes.items():
@@ -159,14 +169,19 @@ class FlowMetaClass(type):
         return new_class
 
 
-class Flow(object, metaclass=FlowMetaClass):
+class Flow(with_metaclass(FlowMetaClass, object)):
     """
-    Base class for flow definition.
+    Base class for flow definition::
+
+        class MyFlow(Flow):
+            start = flow.StartFunction().Next(this.end)
+            end = flow.End()
 
     :keyword process_class: Defines model class for Process
     :keyword task_class: Defines model class for Task
     :keyword management_form_class: Defines form class for task state tracking over GET requests
     :keyword lock_impl: Locking implementation for flow
+    :keyword instance: the singleton instance"
 
     """
 
@@ -182,27 +197,22 @@ class Flow(object, metaclass=FlowMetaClass):
 
     @property
     def urls(self):
-        """Buold urlpatterns list for all flow nodes."""
+        """
+        Build URL patterns list for all flow nodes::
+
+            urlpatterns = [
+                url(r'^admin/', include('admin.site.urls')),
+                MyFlow.instance.urls,
+            ]
+        """
         node_urls = []
         for node in self._meta.nodes():
             node_urls += node.urls()
 
         return url('^', include(node_urls), {'flow_class': self})
 
-    @property
-    def view_permission_name(self):
-        """Name of the permission to view flow instances."""
-        opts = self.process_class._meta
-        return "{}.view_{}".format(opts.app_label, opts.model_name)
-
-    @property
-    def manage_permission_name(self):
-        """Name of the permission to administer flow instances."""
-        opts = self.process_class._meta
-        return "{}.manage_{}".format(opts.app_label, opts.model_name)
-
     def __str__(self):
-        return self.process_title
+        return str(self.process_title)
 
 
 this = This()

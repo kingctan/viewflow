@@ -12,8 +12,6 @@ SECRET_KEY = 'ratn!684yf7ewt-%j%afwf7et9c=!oan$=w6#)fn#4u$ie4!as'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-TEMPLATE_DEBUG = True
-
 ALLOWED_HOSTS = []
 
 INTERNAL_IPS = [
@@ -44,14 +42,14 @@ INSTALLED_APPS = (
     # 'demo.shipment',
 )
 
-MIDDLEWARE_CLASSES = (
+MIDDLEWARE = (
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'material.frontend.middleware.SmoothNavigationMiddleware',
 )
 
 ROOT_URLCONF = 'demo.urls'
@@ -70,23 +68,6 @@ DATABASES = {
 }
 
 # Templates
-
-try:
-    from django.conf.global_settings import TEMPLATE_CONTEXT_PROCESSORS
-    TEMPLATE_CONTEXT_PROCESSORS = list(TEMPLATE_CONTEXT_PROCESSORS) + [
-        'django.core.context_processors.request',
-        'demo.website.users',
-        'material.frontend.context_processors.modules',
-    ]
-
-    TEMPLATE_DIRS = (
-        os.path.join(BASE_DIR, 'demo/templates'),
-    )
-except ImportError:
-    """
-    Ok, on django 1.10
-    """
-
 
 TEMPLATES = [
     {
@@ -135,15 +116,6 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, "demo", "static"),
 ]
-
-# Celery
-
-INSTALLED_APPS += ('kombu.transport.django', )
-BROKER_URL = 'django://'
-
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-
 
 try:
     from demo.local_settings import *  # NOQA

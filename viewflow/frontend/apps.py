@@ -1,22 +1,23 @@
 from django.apps import AppConfig
-from django.conf.urls import url, include
-from django.core.urlresolvers import reverse
 from django.template import Template, TemplateDoesNotExist
 from django.template.loader import get_template
+from django.urls import reverse
+from django.utils.module_loading import autodiscover_modules
+from django.utils.module_loading import import_string
+from django.utils.translation import ugettext_lazy as _
 
 from material import frontend
 from material.frontend.apps import ModuleMixin
 
-from ..compat import autodiscover_modules
-
 
 class ViewflowFrontendConfig(ModuleMixin, AppConfig):
-    """Application config for the viewflow fronend."""
+    """Application config for the viewflow frontend."""
 
     name = 'viewflow.frontend'
     label = 'viewflow_frontend'
-    verbose_name = "Workflow"
+    verbose_name = _("Workflow")
     icon = '<i class="material-icons">assignment</i>'
+    viewset = 'viewflow.frontend.viewset.FrontendViewSet'
 
     def __init__(self, app_name, app_module):  # noqa D102
         super(ViewflowFrontendConfig, self).__init__(app_name, app_module)
@@ -24,7 +25,7 @@ class ViewflowFrontendConfig(ModuleMixin, AppConfig):
 
     def register(self, flow_class, viewset_class=None):
         """Register a flow class at the frontend."""
-        from ..flow.viewset import FlowViewSet
+        from .viewset import FlowViewSet
 
         if flow_class not in self._registry:
             if viewset_class is None:
@@ -34,43 +35,27 @@ class ViewflowFrontendConfig(ModuleMixin, AppConfig):
 
     def has_perm(self, user):
         """Any authenticated user has a permission for the viewflow."""
-        return user.is_authenticated()
+        return user.is_authenticated
 
     def ready(self):
         """Import all <app>/flows.py modules."""
         autodiscover_modules('flows', register_to=self)
+        viewset_class = import_string(self.viewset)
+        self.viewset = viewset_class(self._registry)
 
     @property
     def urls(self):  # noqa D102
-        from . import views
-        from viewflow.flow import views as viewflow_views
-
         base_url = '^workflow/'
 
-        module_views = [
-            url('^$', viewflow_views.AllTaskListView.as_view(ns_map=self.ns_map), name="index"),
-            url('^queue/$', viewflow_views.AllQueueListView.as_view(ns_map=self.ns_map), name="queue"),
-            url('^archive/$', viewflow_views.AllArchiveListView.as_view(ns_map=self.ns_map), name="archive"),
-            url('^action/unassign/$', views.TasksUnAssignView.as_view(ns_map=self.ns_map), name="unassign"),
-            url('^action/assign/$', views.TasksAssignView.as_view(ns_map=self.ns_map), name="assign"),
-        ]
-
-        for flow_class, flow_router in self._registry.items():
-            flow_label = flow_class._meta.app_label
-            module_views.append(
-                url('^{}/'.format(flow_label), include(flow_router.urls, namespace=flow_label))
-            )
-
-        patterns = [
-            url('^', (module_views, 'viewflow', 'viewflow'))
-        ]
-
         return frontend.ModuleURLResolver(
-            base_url, patterns, module=self, app_name=self.label)
+            base_url, self.viewset.urls, module=self)
 
     def index_url(self):
         """Base view for the viewflow frontend."""
         return reverse('viewflow:index')
+
+    def base_template(self):
+        return get_template('viewflow/base_module.html')
 
     def menu(self):
         """Module menu."""
@@ -81,14 +66,11 @@ class ViewflowFrontendConfig(ModuleMixin, AppConfig):
 
     @property
     def ns_map(self):
-        """List of namespace for flows."""
-        return {
-            flow_class._meta.app_label: flow_class for flow_class, flow_site in self._registry.items()
-        }
+        return self.viewset.ns_map
 
     @property
     def flows(self):
-        """List of all registred flows."""
+        """List of all registered flows."""
         return self._registry.keys()
 
     @property
